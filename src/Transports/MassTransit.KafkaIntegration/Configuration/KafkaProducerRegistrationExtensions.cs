@@ -8,7 +8,7 @@ namespace MassTransit
     using Microsoft.Extensions.DependencyInjection.Extensions;
 
 
-    public static class KafkaProducerRegistrationExtensions
+    public static partial class KafkaProducerRegistrationExtensions
     {
         /// <summary>
         /// Add a provider to the container for the specified message type, using a key type of Null
@@ -129,7 +129,7 @@ namespace MassTransit
                 new KeyedTopicProducer<TKey, T>(provider.GetRequiredService<ITopicProducer<TKey, T>>(), keyResolver));
         }
 
-        static ITopicProducer<TKey, T> GetProducer<TKey, T>(string topicName, ITopicProducerProvider rider, IServiceProvider provider)
+        private static ITopicProducer<TKey, T> GetProducer<TKey, T>(string topicName, ITopicProducerProvider rider, IServiceProvider provider)
             where T : class
         {
             var address = new Uri($"topic:{topicName}");
@@ -137,13 +137,68 @@ namespace MassTransit
             return GetProducer<TKey, T>(address, rider, provider);
         }
 
-        static ITopicProducer<TKey, T> GetProducer<TKey, T>(Uri address, ITopicProducerProvider rider, IServiceProvider provider)
+        private static ITopicProducer<TKey, T> GetProducer<TKey, T>(Uri address, ITopicProducerProvider rider, IServiceProvider provider)
             where T : class
         {
             var producerProvider = rider.GetScopedTopicProducerProvider(provider);
             ITopicProducer<TKey, T> producer = producerProvider.GetProducer<TKey, T>(address);
 
             return new ScopedTopicProducer<TKey, T>(producer, provider);
+        }
+
+        /// <summary>
+        /// Add a provider to the container for the specified message type, using a key type of Null
+        /// The producer must be configured in the UsingKafka configuration method.
+        /// </summary>
+        /// <param name="configurator"></param>
+        /// <param name="producerKey">The key of producer</param>
+        /// <param name="topicName">The topic name</param>
+        /// <param name="configure"></param>
+        /// <typeparam name="T">The message type</typeparam>
+        public static void AddKeyedProducer<T>(this IRiderRegistrationConfigurator configurator, string producerKey, string topicName,
+            Action<IRiderRegistrationContext, IKafkaProducerConfigurator<Null, T>> configure = null)
+            where T : class
+        {
+            configurator.AddKeyedProducer(producerKey, topicName, default, configure);
+        }
+
+        /// <summary>
+        /// Add a provider to the container for the specified message type, using a key type of Null
+        /// The producer must be configured in the UsingKafka configuration method.
+        /// </summary>
+        /// <param name="configurator"></param>
+        /// <param name="producerKey">The key of producer</param>
+        /// <param name="topicName">The topic name</param>
+        /// <param name="producerConfig"></param>
+        /// <param name="configure"></param>
+        /// <typeparam name="T">The message type</typeparam>
+        public static void AddKeyedProducer<T>(this IRiderRegistrationConfigurator configurator, string producerKey, string topicName,
+            ProducerConfig producerConfig,
+            Action<IRiderRegistrationContext, IKafkaProducerConfigurator<Null, T>> configure = null)
+            where T : class
+        {
+            configurator.AddKeyedProducer(producerKey, topicName, producerConfig, _ => default, configure);
+        }
+
+        /// <summary>
+        /// Add a provider to the container for the specified message type, using a key type of Null
+        /// The producer must be configured in the UsingKafka configuration method.
+        /// </summary>
+        /// <param name="configurator"></param>
+        /// <param name="producerKey">The producer Key</param>
+        /// <param name="topicName">The topic name</param>
+        /// <param name="producerConfig"></param>
+        /// <param name="keyResolver">Key resolver</param>
+        /// <param name="configure"></param>
+        /// <typeparam name="T">The message type</typeparam>
+        /// <typeparam name="TKey">The key type</typeparam>
+        public static void AddKeyedProducer<TKey, T>(this IRiderRegistrationConfigurator configurator, string producerKey, string topicName,
+           ProducerConfig producerConfig, KafkaKeyResolver<TKey, T> keyResolver,
+           Action<IRiderRegistrationContext, IKafkaProducerConfigurator<TKey, T>> configure = null)
+           where T : class
+        {
+            configurator.AddProducer(topicName, producerConfig, configure);
+            configurator.TryAddKeyedScoped<ITopicProducer<T>>(producerKey, (provider, _) => new KeyedTopicProducer<TKey, T>(provider.GetRequiredService<ITopicProducer<TKey, T>>(), keyResolver));
         }
     }
 }
